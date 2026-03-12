@@ -208,9 +208,22 @@ def save_language_profiles_payload(payload: dict[str, Any]) -> dict[str, Any]:
     if not profiles:
         raise ValueError("No valid language profiles to save")
 
+    def _count_samples(p: dict[str, Any]) -> int:
+        sb = p.get("samplesByLetter") or {}
+        return sum(len(v) if isinstance(v, list) else 0 for v in sb.values())
+
     for profile in profiles:
         lang_id = profile["id"]
         path = LANGUAGE_STORE_DIR / f"{lang_id}.json"
+        incoming_count = _count_samples(profile)
+        if path.exists() and incoming_count == 0:
+            try:
+                existing = json.loads(path.read_text(encoding="utf-8"))
+                existing_count = _count_samples(existing)
+                if existing_count > 0:
+                    continue
+            except Exception:
+                pass
         path.write_text(json.dumps(profile, ensure_ascii=False), encoding="utf-8")
 
     # Keep existing language files not in payload (never delete user data)
@@ -1039,6 +1052,16 @@ class AppHandler(SimpleHTTPRequestHandler):
             profile["id"] = "alien"
             _ensure_language_store()
             path = LANGUAGE_STORE_DIR / "alien.json"
+            incoming_count = sum(len(v) if isinstance(v, list) else 0 for v in (profile.get("samplesByLetter") or {}).values())
+            if path.exists() and incoming_count == 0:
+                try:
+                    existing = json.loads(path.read_text(encoding="utf-8"))
+                    existing_count = sum(len(v) if isinstance(v, list) else 0 for v in (existing.get("samplesByLetter") or {}).values())
+                    if existing_count > 0:
+                        self._send_json(HTTPStatus.OK, {"ok": True, "path": str(path), "message": "Kept existing data (incoming was empty)"})
+                        return
+                except Exception:
+                    pass
             path.write_text(json.dumps(profile, ensure_ascii=False), encoding="utf-8")
             self._send_json(HTTPStatus.OK, {"ok": True, "path": str(path), "message": "Saved to data/languages/alien.json"})
             return
