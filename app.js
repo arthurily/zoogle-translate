@@ -283,6 +283,12 @@ function emptySamplesMap() {
   return map;
 }
 
+function getEmbeddedDefaultLanguages() {
+  const english = { id: "english", name: "English", samplesByLetter: emptySamplesMap(), metrics: { valAcc: null, valLoss: null, trainedAt: null }, model: null };
+  const zoogle = { id: "alien_zoogle", name: "Zoogle Prime", samplesByLetter: emptySamplesMap(), metrics: { valAcc: null, valLoss: null, trainedAt: null }, model: null };
+  return { english, zoogle };
+}
+
 function sanitizeLanguageName(value) {
   const x = String(value || "").replace(/\s+/g, " ").trim();
   return x.slice(0, 60);
@@ -330,13 +336,13 @@ function loadProfileToState(profileId) {
 function ensureLanguageInitialized() {
   const ids = Object.keys(state.languages || {});
   if (!ids.length) {
-    const base = createLanguageProfile("Unnamed Language");
-    state.languages = { [base.id]: base };
-    state.activeLanguageId = base.id;
-    state.languageName = base.name;
-    state.samplesByLetter = base.samplesByLetter;
-    state.model = base.model;
-    state.metrics = base.metrics;
+    const { english, zoogle } = getEmbeddedDefaultLanguages();
+    state.languages = { english, alien_zoogle: zoogle };
+    state.activeLanguageId = "english";
+    state.languageName = "English";
+    state.samplesByLetter = english.samplesByLetter;
+    state.model = null;
+    state.metrics = { valAcc: null, valLoss: null, trainedAt: null };
     return;
   }
   if (!state.activeLanguageId || !state.languages[state.activeLanguageId]) {
@@ -585,8 +591,10 @@ async function flushServerSave() {
 }
 
 function getLanguagesStaticBase() {
-  const origin = typeof document !== "undefined" ? document.location.origin : "";
-  return `${origin}/data/languages`;
+  if (typeof document === "undefined") return "data/languages";
+  const loc = document.location;
+  if (loc.protocol === "file:") return "data/languages";
+  return `${loc.origin}/data/languages`;
 }
 
 async function loadLanguagesFromStaticFiles() {
@@ -835,16 +843,19 @@ async function saveAndPushToGitHub() {
     setRepoSaveStatus("Pushing to GitHub...", "training");
 
     const pushResp = await fetch("/api/push-datasets", { method: "POST" });
-    const pushResult = await pushResp.json();
+    const pushResult = pushResp.ok ? await pushResp.json() : { ok: false, error: `HTTP ${pushResp.status}` };
     if (!pushResult.ok) {
-      throw new Error(pushResult.error || "Push failed");
+      const manualCmd = "git add data/languages && git commit -m \"Update datasets\" && git push";
+      setRepoSaveStatus("Push failed", "pending");
+      window.alert(`Push failed: ${pushResult.error || "Unknown"}\n\nSaved to disk. Run in terminal:\n${manualCmd}`);
+      return;
     }
     setRepoSaveStatus(pushResult.pushed ? "Pushed to GitHub" : pushResult.message || "No changes", "ready");
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed";
-    setRepoSaveStatus(message, "pending");
-    console.warn("Save & push failed:", err);
-    window.alert(message);
+    setRepoSaveStatus("Save OK, push failed", "pending");
+    const manualCmd = "git add data/languages && git commit -m \"Update datasets\" && git push";
+    window.alert(`Saved to disk. Push failed: ${message}\n\nRun in terminal:\n${manualCmd}`);
   } finally {
     if (el.pushGitHubBtn) el.pushGitHubBtn.disabled = false;
     if (el.saveRepoDatasetsBtn) el.saveRepoDatasetsBtn.disabled = false;
