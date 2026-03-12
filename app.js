@@ -110,6 +110,7 @@ const el = {
   importDatasetBtn: document.getElementById("import-dataset-btn"),
   importDatasetInput: document.getElementById("import-dataset-input"),
   saveRepoDatasetsBtn: document.getElementById("save-repo-datasets-btn"),
+  pushGitHubBtn: document.getElementById("push-github-btn"),
   repoSaveStatus: document.getElementById("repo-save-status"),
 
   trainBtn: document.getElementById("train-btn"),
@@ -801,6 +802,52 @@ async function saveAllLanguagesToRepoFiles() {
     console.warn("Manual language dataset save failed:", err);
   } finally {
     el.saveRepoDatasetsBtn.disabled = false;
+  }
+}
+
+async function saveAndPushToGitHub() {
+  const payload = buildStatePayload();
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+
+  if (languageApiAvailability === "unavailable") {
+    setRepoSaveStatus("Server API unavailable. Run server.py first.", "pending");
+    window.alert("Run server.py first so the app can save and push to GitHub.");
+    return;
+  }
+
+  if (el.pushGitHubBtn) el.pushGitHubBtn.disabled = true;
+  if (el.saveRepoDatasetsBtn) el.saveRepoDatasetsBtn.disabled = true;
+  setRepoSaveStatus("Saving...", "training");
+  try {
+    const saveResp = await fetch(LANGUAGES_API_PATH, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (saveResp.status === 404 || saveResp.status === 405) {
+      languageApiAvailability = "unavailable";
+      throw new Error("Server API unavailable. Run server.py first.");
+    }
+    if (!saveResp.ok) {
+      throw new Error(`Save failed: HTTP ${saveResp.status}`);
+    }
+    languageApiAvailability = "available";
+    setRepoSaveStatus("Pushing to GitHub...", "training");
+
+    const pushResp = await fetch("/api/push-datasets", { method: "POST" });
+    const pushResult = await pushResp.json();
+    if (!pushResult.ok) {
+      throw new Error(pushResult.error || "Push failed");
+    }
+    setRepoSaveStatus(pushResult.pushed ? "Pushed to GitHub" : pushResult.message || "No changes", "ready");
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed";
+    setRepoSaveStatus(message, "pending");
+    console.warn("Save & push failed:", err);
+    window.alert(message);
+  } finally {
+    if (el.pushGitHubBtn) el.pushGitHubBtn.disabled = false;
+    if (el.saveRepoDatasetsBtn) el.saveRepoDatasetsBtn.disabled = false;
   }
 }
 
@@ -1948,6 +1995,7 @@ async function trainModel() {
     state.model = model;
     state.metrics.trainedAt = Date.now();
     saveState();
+    queueServerSave(true);
     setPill(el.trainStatus, "Trained", "ready");
   } catch (err) {
     console.error(err);
@@ -2604,6 +2652,11 @@ function bindEvents() {
   el.saveRepoDatasetsBtn.addEventListener("click", () => {
     void saveAllLanguagesToRepoFiles();
   });
+  if (el.pushGitHubBtn) {
+    el.pushGitHubBtn.addEventListener("click", () => {
+      void saveAndPushToGitHub();
+    });
+  }
 
   el.trainBtn.addEventListener("click", trainModel);
 

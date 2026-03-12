@@ -993,6 +993,76 @@ class AppHandler(SimpleHTTPRequestHandler):
             self._send_json(HTTPStatus.OK, {"ok": True, **saved})
             return
 
+        if self.path in {"/api/push-datasets", "/api/push-datasets/"}:
+            try:
+                result = subprocess.run(
+                    ["git", "add", "data/languages/"],
+                    cwd=ROOT,
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
+                if result.returncode != 0:
+                    self._send_json(
+                        HTTPStatus.INTERNAL_SERVER_ERROR,
+                        {"ok": False, "error": f"git add failed: {result.stderr or result.stdout}"},
+                    )
+                    return
+
+                result = subprocess.run(
+                    ["git", "status", "--porcelain", "data/languages/"],
+                    cwd=ROOT,
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+                if not result.stdout.strip():
+                    self._send_json(HTTPStatus.OK, {"ok": True, "pushed": False, "message": "No changes to push"})
+                    return
+
+                result = subprocess.run(
+                    ["git", "commit", "-m", "Update datasets from training"],
+                    cwd=ROOT,
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
+                if result.returncode != 0:
+                    self._send_json(
+                        HTTPStatus.INTERNAL_SERVER_ERROR,
+                        {"ok": False, "error": f"git commit failed: {result.stderr or result.stdout}"},
+                    )
+                    return
+
+                result = subprocess.run(
+                    ["git", "push", "origin", "main"],
+                    cwd=ROOT,
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+                if result.returncode != 0:
+                    self._send_json(
+                        HTTPStatus.INTERNAL_SERVER_ERROR,
+                        {"ok": False, "error": f"git push failed: {result.stderr or result.stdout}"},
+                    )
+                    return
+
+                self._send_json(HTTPStatus.OK, {"ok": True, "pushed": True, "message": "Pushed to GitHub"})
+            except subprocess.TimeoutExpired:
+                self._send_json(HTTPStatus.GATEWAY_TIMEOUT, {"ok": False, "error": "Push timed out"})
+            except FileNotFoundError:
+                self._send_json(
+                    HTTPStatus.INTERNAL_SERVER_ERROR,
+                    {"ok": False, "error": "git not found. Run 'git add data/languages && git commit -m \"Update datasets\" && git push' manually."},
+                )
+            except Exception as exc:  # noqa: BLE001
+                self._send_json(
+                    HTTPStatus.INTERNAL_SERVER_ERROR,
+                    {"ok": False, "error": str(exc)},
+                )
+            return
+
         if self.path != "/api/word-recognize":
             self._send_json(HTTPStatus.NOT_FOUND, {"ok": False, "error": "Not found"})
             return
