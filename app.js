@@ -111,6 +111,7 @@ const el = {
   importDatasetInput: document.getElementById("import-dataset-input"),
   saveRepoDatasetsBtn: document.getElementById("save-repo-datasets-btn"),
   pushGitHubBtn: document.getElementById("push-github-btn"),
+  reloadLanguagesBtn: document.getElementById("reload-languages-btn"),
   repoSaveStatus: document.getElementById("repo-save-status"),
 
   trainBtn: document.getElementById("train-btn"),
@@ -2666,6 +2667,12 @@ function bindEvents() {
   if (el.pushGitHubBtn) {
     el.pushGitHubBtn.addEventListener("click", () => {
       void saveAndPushToGitHub();
+    });
+  }
+  if (el.reloadLanguagesBtn) {
+    el.reloadLanguagesBtn.addEventListener("click", async () => {
+      languageApiAvailability = "unknown";
+      await hydrateStateFromServer();
     });
   }
 

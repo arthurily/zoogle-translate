@@ -213,18 +213,28 @@ def save_language_profiles_payload(payload: dict[str, Any]) -> dict[str, Any]:
         path = LANGUAGE_STORE_DIR / f"{lang_id}.json"
         path.write_text(json.dumps(profile, ensure_ascii=False), encoding="utf-8")
 
-    keep_names = {f"{profile['id']}.json" for profile in profiles}
-    for path in LANGUAGE_STORE_DIR.glob("*.json"):
+    # Keep existing language files not in payload (never delete user data)
+    existing_extra: set[str] = set()
+    if LANGUAGE_INDEX_PATH.exists():
+        try:
+            raw = json.loads(LANGUAGE_INDEX_PATH.read_text(encoding="utf-8"))
+            raw_ids = raw.get("profileIds")
+            if isinstance(raw_ids, list):
+                for rid in raw_ids:
+                    lid = _safe_language_id(rid)
+                    if lid and lid not in seen_ids:
+                        existing_extra.add(lid)
+        except Exception:
+            pass
+    for path in sorted(LANGUAGE_STORE_DIR.glob("*.json")):
         if path.name == LANGUAGE_INDEX_PATH.name:
             continue
-        if path.name in keep_names:
-            continue
-        try:
-            path.unlink()
-        except OSError:
-            pass
+        lid = _safe_language_id(path.stem)
+        if lid and lid not in seen_ids:
+            existing_extra.add(lid)
 
     ordered_ids = [profile["id"] for profile in profiles]
+    ordered_ids.extend(sorted(existing_extra))
     active_language_id = _safe_language_id(payload.get("activeLanguageId"))
     if active_language_id not in ordered_ids:
         active_language_id = ordered_ids[0]
