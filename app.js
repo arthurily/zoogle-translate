@@ -1796,7 +1796,7 @@ function switchView(view) {
 
 function applyTheme(theme) {
   const normalized = theme === "neon" ? "extraterrestrial" : theme;
-  const t = THEME_SEQUENCE.includes(normalized) ? normalized : "light";
+  const t = THEME_SEQUENCE.includes(normalized) ? normalized : "extraterrestrial";
   el.body.setAttribute("data-theme", t);
   localStorage.setItem(THEME_KEY, t);
   if (el.themeToggle) el.themeToggle.textContent = `Theme: ${THEME_LABEL[t]}`;
@@ -1806,7 +1806,7 @@ function initTheme() {
   const saved = localStorage.getItem(THEME_KEY);
   applyTheme(saved);
   el.themeToggle.addEventListener("click", () => {
-    const current = el.body.getAttribute("data-theme") || "light";
+    const current = el.body.getAttribute("data-theme") || "extraterrestrial";
     const idx = THEME_SEQUENCE.indexOf(current);
     const next = THEME_SEQUENCE[(idx + 1) % THEME_SEQUENCE.length];
     applyTheme(next);
