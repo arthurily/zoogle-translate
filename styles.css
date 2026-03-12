@@ -618,6 +618,11 @@ body[data-theme="extraterrestrial"] .translate-row {
   cursor: default;
 }
 
+.translate-hover-hint {
+  font-size: 12px;
+  margin: -2px 2px 10px;
+}
+
 body[data-theme="dark"] .output-card .output-main {
   background: rgba(7, 14, 23, 0.5);
 }
