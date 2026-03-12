@@ -1003,6 +1003,27 @@ class AppHandler(SimpleHTTPRequestHandler):
             self._send_json(HTTPStatus.OK, {"ok": True, **saved})
             return
 
+        if self.path in {"/api/save-alien", "/api/save-alien/"}:
+            length = int(self.headers.get("Content-Length", "0") or "0")
+            if length <= 0 or length > 50_000_000:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "Invalid request body size"})
+                return
+            try:
+                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+            except Exception:  # noqa: BLE001
+                self._send_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "Invalid JSON body"})
+                return
+            profile = _normalize_language_profile(payload, fallback_id="alien")
+            if profile is None:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": "Invalid profile"})
+                return
+            profile["id"] = "alien"
+            _ensure_language_store()
+            path = LANGUAGE_STORE_DIR / "alien.json"
+            path.write_text(json.dumps(profile, ensure_ascii=False), encoding="utf-8")
+            self._send_json(HTTPStatus.OK, {"ok": True, "path": str(path), "message": "Saved to data/languages/alien.json"})
+            return
+
         if self.path in {"/api/push-datasets", "/api/push-datasets/"}:
             try:
                 result = subprocess.run(

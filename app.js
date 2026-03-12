@@ -111,6 +111,7 @@ const el = {
   importDatasetInput: document.getElementById("import-dataset-input"),
   saveRepoDatasetsBtn: document.getElementById("save-repo-datasets-btn"),
   pushGitHubBtn: document.getElementById("push-github-btn"),
+  saveAlienBtn: document.getElementById("save-alien-btn"),
   reloadLanguagesBtn: document.getElementById("reload-languages-btn"),
   repoSaveStatus: document.getElementById("repo-save-status"),
 
@@ -860,6 +861,50 @@ async function saveAndPushToGitHub() {
   } finally {
     if (el.pushGitHubBtn) el.pushGitHubBtn.disabled = false;
     if (el.saveRepoDatasetsBtn) el.saveRepoDatasetsBtn.disabled = false;
+  }
+}
+
+async function saveAlienToFile() {
+  syncCurrentProfile();
+  let profile = null;
+  for (const id of Object.keys(state.languages)) {
+    const p = state.languages[id];
+    if (p && (p.name === "ALIEN" || id === "lang-mmn50qbg-ets0ol")) {
+      profile = p;
+      break;
+    }
+  }
+  if (!profile) profile = activeProfile();
+  if (!profile) {
+    window.alert("No language selected. Select ALIEN or another language first.");
+    return;
+  }
+  const payload = {
+    id: profile.id,
+    name: profile.name || "ALIEN",
+    samplesByLetter: profile.samplesByLetter,
+    metrics: profile.metrics || { valAcc: null, valLoss: null, trainedAt: null },
+    model: serializeModel(profile.model),
+  };
+  if (el.saveAlienBtn) el.saveAlienBtn.disabled = true;
+  setRepoSaveStatus("Saving to alien.json...", "training");
+  try {
+    const resp = await fetch("/api/save-alien", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const result = resp.ok ? await resp.json() : { ok: false, error: `HTTP ${resp.status}` };
+    if (!result.ok) {
+      throw new Error(result.error || "Save failed");
+    }
+    setRepoSaveStatus("Saved to data/languages/alien.json", "ready");
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Failed";
+    setRepoSaveStatus(msg, "pending");
+    window.alert(`Save failed: ${msg}\n\nRun server.py first.`);
+  } finally {
+    if (el.saveAlienBtn) el.saveAlienBtn.disabled = false;
   }
 }
 
@@ -2667,6 +2712,11 @@ function bindEvents() {
   if (el.pushGitHubBtn) {
     el.pushGitHubBtn.addEventListener("click", () => {
       void saveAndPushToGitHub();
+    });
+  }
+  if (el.saveAlienBtn) {
+    el.saveAlienBtn.addEventListener("click", () => {
+      void saveAlienToFile();
     });
   }
   if (el.reloadLanguagesBtn) {
