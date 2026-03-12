@@ -114,6 +114,7 @@ const el = {
   saveAlienBtn: document.getElementById("save-alien-btn"),
   reloadLanguagesBtn: document.getElementById("reload-languages-btn"),
   repoSaveStatus: document.getElementById("repo-save-status"),
+  saveHint: document.getElementById("save-hint"),
 
   trainBtn: document.getElementById("train-btn"),
   trainStatus: document.getElementById("train-status"),
@@ -782,12 +783,6 @@ async function saveAllLanguagesToRepoFiles() {
   const payload = buildStatePayload();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
 
-  if (languageApiAvailability === "unavailable") {
-    setRepoSaveStatus("Server API unavailable. Run server.py to write dataset files.", "pending");
-    window.alert("Run server.py first so the app can write language datasets into data/languages/.");
-    return;
-  }
-
   el.saveRepoDatasetsBtn.disabled = true;
   setRepoSaveStatus("Saving language datasets to repo files...", "training");
   try {
@@ -809,6 +804,7 @@ async function saveAllLanguagesToRepoFiles() {
   } catch (err) {
     const message = err instanceof Error ? err.message : "Save failed";
     setRepoSaveStatus(message, "pending");
+    window.alert(`Save failed: ${message}\n\nMake sure server.py is running and open http://127.0.0.1:8000`);
     console.warn("Manual language dataset save failed:", err);
   } finally {
     el.saveRepoDatasetsBtn.disabled = false;
@@ -818,12 +814,6 @@ async function saveAllLanguagesToRepoFiles() {
 async function saveAndPushToGitHub() {
   const payload = buildStatePayload();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-
-  if (languageApiAvailability === "unavailable") {
-    setRepoSaveStatus("Server API unavailable. Run server.py first.", "pending");
-    window.alert("Run server.py first so the app can save and push to GitHub.");
-    return;
-  }
 
   if (el.pushGitHubBtn) el.pushGitHubBtn.disabled = true;
   if (el.saveRepoDatasetsBtn) el.saveRepoDatasetsBtn.disabled = true;
@@ -854,10 +844,9 @@ async function saveAndPushToGitHub() {
     }
     setRepoSaveStatus(pushResult.pushed ? "Pushed to GitHub" : pushResult.message || "No changes", "ready");
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed";
-    setRepoSaveStatus("Save OK, push failed", "pending");
-    const manualCmd = "git add data/languages && git commit -m \"Update datasets\" && git push";
-    window.alert(`Saved to disk. Push failed: ${message}\n\nRun in terminal:\n${manualCmd}`);
+    const msg = err instanceof Error ? err.message : "Failed";
+    setRepoSaveStatus("Save failed", "pending");
+    window.alert(`Save failed: ${msg}\n\nMake sure server.py is running. Open http://127.0.0.1:8000`);
   } finally {
     if (el.pushGitHubBtn) el.pushGitHubBtn.disabled = false;
     if (el.saveRepoDatasetsBtn) el.saveRepoDatasetsBtn.disabled = false;
@@ -921,7 +910,7 @@ async function saveAlienToFile() {
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Failed";
     setRepoSaveStatus(msg, "pending");
-    window.alert(`Save failed: ${msg}\n\nRun server.py first.`);
+    window.alert(`Save failed: ${msg}\n\nMake sure server.py is running. Open http://127.0.0.1:8000`);
   } finally {
     if (el.saveAlienBtn) el.saveAlienBtn.disabled = false;
   }
@@ -2803,6 +2792,9 @@ function initialize() {
   clearPredictionDisplays();
   resetTranslator();
 
+  if (el.saveHint && document.location.protocol === "file:") {
+    el.saveHint.style.display = "block";
+  }
   bindEvents();
   updateUi();
   switchView("translate");
