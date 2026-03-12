@@ -336,20 +336,34 @@ function loadProfileToState(profileId) {
   return true;
 }
 
+function preferredLanguageId(ids = Object.keys(state.languages || {})) {
+  if (!ids.length) return null;
+  if (ids.includes("alien")) return "alien";
+  if (ids.includes("alien_zoogle")) return "alien_zoogle";
+  for (let i = 0; i < ids.length; i += 1) {
+    const id = ids[i];
+    if (/alien/i.test(id)) return id;
+    const name = sanitizeLanguageName(state.languages[id]?.name || "");
+    if (/alien/i.test(name)) return id;
+  }
+  return ids[0];
+}
+
 function ensureLanguageInitialized() {
   const ids = Object.keys(state.languages || {});
   if (!ids.length) {
     const { english, zoogle } = getEmbeddedDefaultLanguages();
     state.languages = { english, alien_zoogle: zoogle };
-    state.activeLanguageId = "english";
-    state.languageName = "English";
-    state.samplesByLetter = english.samplesByLetter;
+    state.activeLanguageId = preferredLanguageId(Object.keys(state.languages)) || "alien_zoogle";
+    const initial = state.languages[state.activeLanguageId] || zoogle;
+    state.languageName = sanitizeLanguageName(initial.name) || "Zoogle Prime";
+    state.samplesByLetter = initial.samplesByLetter;
     state.model = null;
     state.metrics = { valAcc: null, valLoss: null, trainedAt: null };
     return;
   }
   if (!state.activeLanguageId || !state.languages[state.activeLanguageId]) {
-    state.activeLanguageId = state.languages["alien"] ? "alien" : ids[0];
+    state.activeLanguageId = preferredLanguageId(ids) || ids[0];
   }
   loadProfileToState(state.activeLanguageId);
 }
@@ -1774,7 +1788,7 @@ function updateUi() {
 
   el.trainBtn.disabled = state.isTraining;
   el.testPredictBtn.disabled = !state.model;
-  el.translateBtn.disabled = !state.model;
+  el.translateBtn.disabled = false;
   if (el.deleteLanguageBtn) el.deleteLanguageBtn.disabled = Object.keys(state.languages).length <= 1;
 
   updateLetterGrid();
@@ -2229,8 +2243,8 @@ function resetTranslator() {
   el.translationOutput.textContent = "-";
   el.translationConfidence.textContent = "-";
   el.translationCount.textContent = "0";
-  el.translationDetail.innerHTML = "Train the model, then write symbols to decode with MAP rule \\(\\hat{y}=\\arg\\max_{y} p_{\\theta}(y\\mid X)\\).";
-  typesetMath(el.translationDetail);
+  el.translationDetail.hidden = true;
+  el.translationDetail.textContent = "";
   hideAnalysisPopover();
 }
 
@@ -2581,6 +2595,12 @@ function addSpaceToken() {
 function translateSequence() {
   if (!state.model) {
     setPill(el.trainStatus, "Train the CNN first", "pending");
+    el.translationOutput.textContent = "Train Letter CNN first";
+    el.translationConfidence.textContent = "-";
+    el.translationCount.textContent = "0";
+    el.translationDetail.hidden = false;
+    el.translationDetail.textContent = "Go to Setup & Train and click Train Letter CNN.";
+    hideAnalysisPopover();
     return;
   }
 
@@ -2643,7 +2663,8 @@ function translateSequence() {
     el.translationOutput.textContent = "-";
     el.translationConfidence.textContent = "-";
     el.translationCount.textContent = "0";
-    el.translationDetail.textContent = "No valid symbols detected.";
+    el.translationDetail.hidden = true;
+    el.translationDetail.textContent = "";
     hideAnalysisPopover();
     ensureTranslateTrailingBlank();
     return;
@@ -2657,7 +2678,8 @@ function translateSequence() {
   if (!text) el.translationOutput.textContent = "-";
   el.translationConfidence.textContent = `${(100 * avgConf).toFixed(1)}%`;
   el.translationCount.textContent = String(letterCount);
-  el.translationDetail.textContent = details.join(" • ");
+  el.translationDetail.hidden = true;
+  el.translationDetail.textContent = "";
   hideAnalysisPopover();
 
   ensureTranslateTrailingBlank();
