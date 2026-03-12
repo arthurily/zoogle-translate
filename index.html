@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Zoogle Translate</title>
+    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Rubik+Glitch&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body data-theme="light">
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <svg viewBox="0 0 64 64" class="ufo-logo" role="img" aria-hidden="true">
+            <defs>
+              <linearGradient id="ufoBeam" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stop-color="#a3ffb7" stop-opacity="0.7" />
+                <stop offset="100%" stop-color="#52d981" stop-opacity="0.1" />
+              </linearGradient>
+            </defs>
+            <path d="M24 20c0-5 3.5-9 8-9s8 4 8 9z" fill="#d8ffe4" />
+            <ellipse cx="32" cy="28" rx="23" ry="10" fill="#27b866" />
+            <ellipse cx="32" cy="26.5" rx="19" ry="7" fill="#54d989" />
+            <circle cx="21" cy="29.5" r="2" fill="#dfffe8" />
+            <circle cx="32" cy="31" r="2" fill="#dfffe8" />
+            <circle cx="43" cy="29.5" r="2" fill="#dfffe8" />
+            <path d="M27 36h10l5 16H22z" fill="url(#ufoBeam)" />
+          </svg>
+          <div>
+            <p class="project-tagline">Arthur Ilyasov<br />CS 109 Project</p>
+          </div>
+        </div>
+
+        <nav class="nav">
+          <button class="nav-btn active" data-view="translate">Translate</button>
+          <button class="nav-btn" data-view="setup">Setup & Train</button>
+          <button class="nav-btn" data-view="test">Test Letter</button>
+          <button class="nav-btn" data-view="about">About</button>
+        </nav>
+
+        <div class="sidebar-card">
+          <div class="stat-row"><span>Language</span><span id="stat-language" class="mono">-</span></div>
+          <div class="stat-row"><span>Samples</span><span id="stat-total" class="mono">0</span></div>
+          <div class="stat-row"><span>Ready Letters</span><span id="stat-ready" class="mono">0 / 26</span></div>
+          <div class="stat-row"><span>Model</span><span id="stat-model" class="pill pending">Not Trained</span></div>
+        </div>
+
+        <button id="theme-toggle" class="theme-btn">Theme: Light</button>
+      </aside>
+
+      <main class="main">
+        <section id="view-setup" class="view">
+          <div class="view-header">
+            <h2>Build Alphabet Dataset</h2>
+          </div>
+
+          <div class="grid two">
+            <article class="card">
+              <h3>Language Setup</h3>
+              <div class="field">
+                <label for="language-name-input">Alien Language Name</label>
+                <input id="language-name-input" type="text" placeholder="e.g., Zoogle Prime" maxlength="60" />
+              </div>
+              <div class="meta-grid">
+                <div><span>Total Samples</span><strong id="total-samples">0</strong></div>
+                <div><span>Letters Ready</span><strong id="ready-letters">0 / 26</strong></div>
+                <div><span>Active Letter Samples</span><strong id="active-letter-count">0</strong></div>
+              </div>
+              <div class="btn-row">
+                <button id="reset-letter-btn" class="btn ghost">Reset Active Letter</button>
+                <button id="reset-dataset-btn" class="btn ghost danger">Reset Entire Dataset</button>
+              </div>
+              <div class="btn-row">
+                <button id="export-dataset-btn" class="btn ghost">Export Dataset</button>
+                <button id="import-dataset-btn" class="btn ghost">Import Dataset</button>
+                <input id="import-dataset-input" type="file" accept="application/json" hidden />
+              </div>
+              <div class="btn-row">
+                <button id="save-repo-datasets-btn" class="btn ghost">Save All Languages To Repo Files</button>
+              </div>
+              <div id="repo-save-status" class="pill pending">Not saved to repo files yet.</div>
+            </article>
+
+            <article class="card">
+              <h3>Draw Symbol For <span id="active-letter-chip" class="letter-chip-lg">A</span></h3>
+              <div class="draw-stack">
+                <canvas id="guide-canvas" width="320" height="320"></canvas>
+                <canvas id="dataset-canvas" width="320" height="320"></canvas>
+              </div>
+              <div class="btn-row">
+                <button id="save-sample-btn" class="btn primary">Save Sample</button>
+                <button id="clear-sample-btn" class="btn ghost">Clear</button>
+              </div>
+              <div class="btn-row">
+                <button id="prev-letter-btn" class="btn ghost">Prev Letter</button>
+                <button id="next-letter-btn" class="btn ghost">Next Letter</button>
+              </div>
+              <div id="setup-status" class="pill pending">Collect samples to begin.</div>
+            </article>
+          </div>
+
+          <article class="card">
+            <h3>Letter Progress</h3>
+            <div id="letter-grid" class="letter-grid"></div>
+          </article>
+
+          <div class="grid two">
+            <article class="card">
+              <h3>Train Letter CNN</h3>
+              <div class="meta-grid">
+                <div><span>Status</span><strong id="train-status" class="pill pending">Not Trained</strong></div>
+                <div><span>Validation Accuracy</span><strong id="val-acc">-</strong></div>
+                <div><span>Validation Loss</span><strong id="val-loss">-</strong></div>
+              </div>
+              <progress id="train-progress" max="100" value="0"></progress>
+              <div class="btn-row">
+                <button id="train-btn" class="btn primary">Train Letter CNN</button>
+              </div>
+              <p id="train-note" class="muted"></p>
+            </article>
+
+            <article class="card">
+              <h3>Validation Confusion Matrix</h3>
+              <canvas id="confusion-canvas" width="560" height="560"></canvas>
+            </article>
+          </div>
+        </section>
+
+        <section id="view-translate" class="view active">
+          <div class="view-header">
+            <h2 class="alien-title">
+              <span class="zoogle-word" aria-label="Zoogle">
+                <span class="google-blue">Z</span><span class="google-red">o</span><span class="google-yellow">o</span><span class="google-blue">g</span><span class="google-green">l</span><span class="google-red">e</span>
+              </span>
+              <span class="alien-subtitle-word">Translate</span>
+            </h2>
+          </div>
+
+          <article class="card language-switch-card">
+            <div class="lang-switch-row">
+              <div class="field language-select-field">
+                <label for="language-select">Alien Language</label>
+                <select id="language-select"></select>
+              </div>
+              <div class="btn-row lang-actions">
+                <button id="new-language-btn" class="btn ghost">New Language</button>
+                <button id="delete-language-btn" class="btn ghost danger">Delete Language</button>
+              </div>
+            </div>
+          </article>
+
+          <div class="translate-layout">
+            <article class="card translate-pane input-pane">
+              <h3>Alien Input (<span id="translate-language-name">Unnamed Language</span>)</h3>
+              <div id="translate-input-row" class="translate-row"></div>
+              <div class="btn-row">
+                <button id="add-space-btn" class="btn ghost">Add Space</button>
+                <button id="clear-translate-btn" class="btn ghost">Clear</button>
+              </div>
+            </article>
+
+            <div class="translate-arrow">→</div>
+
+            <article class="card translate-pane output-pane output-card">
+              <h3>English Output</h3>
+              <div id="translation-output" class="output-main">-</div>
+              <div class="meta-grid">
+                <div><span>Average Confidence</span><strong id="translation-confidence">-</strong></div>
+                <div><span>Decoded Symbols</span><strong id="translation-count">0</strong></div>
+              </div>
+              <p id="translation-detail" class="muted" hidden></p>
+            </article>
+          </div>
+
+          <div class="btn-row">
+            <button id="translate-btn" class="btn primary">Translate (Enter)</button>
+          </div>
+        </section>
+
+        <section id="view-test" class="view">
+          <div class="view-header">
+            <h2>Test Single Letter</h2>
+          </div>
+
+          <div class="grid two">
+            <article class="card">
+              <h3>Draw Test Symbol</h3>
+              <div class="draw-stack single">
+                <canvas id="test-canvas" width="320" height="320"></canvas>
+              </div>
+              <div class="btn-row">
+                <button id="test-predict-btn" class="btn primary">Classify</button>
+                <button id="test-clear-btn" class="btn ghost">Clear</button>
+              </div>
+              <div class="meta-grid">
+                <div><span>Prediction</span><strong id="test-pred">-</strong></div>
+                <div><span>Confidence</span><strong id="test-conf">-</strong></div>
+                <div><span>Entropy</span><strong id="test-entropy">-</strong></div>
+                <div><span>Top Margin</span><strong id="test-margin">-</strong></div>
+              </div>
+            </article>
+
+            <article class="card">
+              <h3>Visual Diagnostics</h3>
+              <div class="mini-canvas-grid">
+                <div>
+                  <span class="mini-label">Normalized 24×24</span>
+                  <canvas id="normalized-canvas" width="160" height="160"></canvas>
+                </div>
+                <div>
+                  <span class="mini-label">Saliency Map</span>
+                  <canvas id="saliency-canvas" width="160" height="160"></canvas>
+                </div>
+              </div>
+              <div class="bars-wrap">
+                <h4>Posterior \(p(Y \mid X)\)</h4>
+                <div id="posterior-bars" class="bars"></div>
+              </div>
+              <div class="bars-wrap">
+                <h4>Bayes Evidence \(\frac{p(Y \mid X)}{p(Y)}\)</h4>
+                <div id="bayes-bars" class="bars"></div>
+              </div>
+              <div>
+                <h4>Conv Filter Contributions</h4>
+                <div id="contrib-list" class="contrib-list"></div>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section id="view-about" class="view">
+          <div class="view-header">
+            <h2>About Zoogle Translate</h2>
+            <p>A CS109-driven walkthrough of the full probabilistic pipeline, from labeled data to posterior inference.</p>
+          </div>
+
+          <div class="about-layout">
+            <article class="card">
+              <h3>Process Breakdown</h3>
+              <div class="about-steps">
+                <div class="about-step">
+                  <span class="about-step-num">1</span>
+                  <p><strong>Labeling:</strong> You create a dataset of pairs \((x_i, y_i)\), where \(x_i\) is a normalized symbol image and \(y_i\in\{A,\dots,Z\}\).</p>
+                </div>
+                <div class="about-step">
+                  <span class="about-step-num">2</span>
+                  <p><strong>Modeling:</strong> A CNN parameterized by \(\theta\) produces class posteriors \(p_{\theta}(Y\mid X)\) over all letters.</p>
+                </div>
+                <div class="about-step">
+                  <span class="about-step-num">3</span>
+                  <p><strong>Learning:</strong> Training minimizes \(\mathcal{L}_{\mathrm{CE}}=-\log p_{\theta}(y\mid x)\), equivalent to maximum-likelihood estimation.</p>
+                </div>
+                <div class="about-step">
+                  <span class="about-step-num">4</span>
+                  <p><strong>Decision Rule:</strong> Decoding uses MAP inference \(\hat{y}=\arg\max_y p_{\theta}(y\mid X)\) for each symbol token.</p>
+                </div>
+                <div class="about-step">
+                  <span class="about-step-num">5</span>
+                  <p><strong>Uncertainty + Diagnostics:</strong> The app reports entropy \(H(Y\mid X)\), MAP margin \(\Delta p\), and evidence ratio \(\frac{p(Y\mid X)}{p(Y)}\).</p>
+                </div>
+              </div>
+            </article>
+
+            <div class="grid two">
+              <article class="card about-visual-card">
+                <h3>Posterior Update \(p(Y\mid X)\)</h3>
+                <p class="muted">Visual comparison of prior \(p(Y)\) and posterior \(p(Y\mid X)\) for top classes. MAP picks the largest posterior bar.</p>
+                <canvas id="about-bayes-canvas" width="520" height="240"></canvas>
+              </article>
+
+              <article class="card about-visual-card">
+                <h3>Uncertainty \(H(Y\mid X)\)</h3>
+                <p class="muted">Binary entropy curve \(H_2(p)\). Larger posterior concentration typically lowers uncertainty.</p>
+                <canvas id="about-entropy-canvas" width="520" height="240"></canvas>
+              </article>
+            </div>
+
+            <article class="card prose">
+              <h3>CS109 Concepts Applied</h3>
+              <div class="about-concepts">
+                <p><strong>Random Variables + Conditionals:</strong> \(X\) is the observed symbol image, \(Y\) is the letter label, and prediction uses \(p_{\theta}(Y\mid X)\).</p>
+                <p><strong>Bayes Theorem:</strong> Evidence is interpreted through \(\frac{p(Y\mid X)}{p(Y)}\), contrasting posterior mass against a prior baseline.</p>
+                <p><strong>MAP Inference:</strong> Classification uses \(\arg\max_y p_{\theta}(y\mid X)\), the standard posterior decision rule.</p>
+                <p><strong>Entropy:</strong> \(H(Y\mid X)\) quantifies uncertainty in bits; high entropy flags ambiguous symbols.</p>
+                <p><strong>Likelihood + MLE:</strong> Cross-entropy training minimizes \(-\log p_{\theta}(y\mid x)\), i.e., negative log-likelihood over labeled data.</p>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <div id="analysis-popover" class="analysis-popover hidden">
+          <div class="analysis-head">
+            <strong id="analysis-title">Posterior Diagnostics</strong>
+            <span id="analysis-subtitle" class="muted mono"></span>
+          </div>
+          <div class="analysis-metrics">
+            <div><span>Posterior</span><strong id="analysis-confidence">-</strong></div>
+            <div><span>Entropy</span><strong id="analysis-entropy">-</strong></div>
+            <div><span>MAP Margin</span><strong id="analysis-margin">-</strong></div>
+          </div>
+          <div class="analysis-canvas-grid">
+            <div>
+              <span class="mini-label">Normalized</span>
+              <canvas id="analysis-normalized-canvas" width="120" height="120"></canvas>
+            </div>
+            <div>
+              <span class="mini-label">Saliency</span>
+              <canvas id="analysis-saliency-canvas" width="120" height="120"></canvas>
+            </div>
+          </div>
+          <div>
+            <span class="mini-label">Posterior Distribution</span>
+            <canvas id="analysis-prob-canvas" width="420" height="130"></canvas>
+          </div>
+          <div id="analysis-reason" class="analysis-reason muted"></div>
+          <div id="analysis-top-bars" class="analysis-top-bars"></div>
+        </div>
+      </main>
+    </div>
+
+    <script>
+      window.MathJax = {
+        tex: {
+          inlineMath: [["\\(", "\\)"]]
+        },
+        svg: {
+          fontCache: "global"
+        }
+      };
+    </script>
+    <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
