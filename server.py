@@ -22,43 +22,9 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parent
-RUSSIAN_CHARS = set("абвгдеёжзийклмнопрстуфхцчшщъыьэюя")
-WORD_LM_JSON_PATH = ROOT / "data" / "russian_words_lm.json"
 LANGUAGE_STORE_DIR = ROOT / "data" / "languages"
 LANGUAGE_INDEX_PATH = LANGUAGE_STORE_DIR / "index.json"
 LANGUAGE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,120}$")
-DEFAULT_WORD_CSV_CANDIDATES = [
-    ROOT / "data" / "Train.csv",
-    ROOT / "data" / "train.csv",
-    ROOT / "data" / "words.csv",
-    ROOT / "data" / "word_dataset.csv",
-    Path("/Users/arthurilyasov/Downloads/archive (1)/Train.csv"),
-    Path("/Users/arthurilyasov/Downloads/archive/Train.csv"),
-]
-WORD_LM_REFRESH_INTERVAL_SEC = 2.5
-
-# Connected cursive in Russian often makes certain letters hard to separate.
-# These groups encode low-penalty substitutions for lexicon correction.
-CONNECTED_EQUIV_GROUPS = [
-    "ийшщмлтп",
-    "аео",
-    "бв",
-    "гд",
-    "ьъы",
-    "жх",
-    "нп",
-    "еуё",
-]
-
-SUBSTITUTION_COST: dict[tuple[str, str], float] = {}
-for group in CONNECTED_EQUIV_GROUPS:
-    chars = list(group)
-    for i in range(len(chars)):
-        for j in range(len(chars)):
-            if i == j:
-                continue
-            SUBSTITUTION_COST[(chars[i], chars[j])] = 0.35
-
 
 def load_local_env() -> None:
     """Load key=value pairs from local env files into process env.
@@ -83,151 +49,24 @@ def load_local_env() -> None:
 load_local_env()
 
 
+SUBSTITUTION_COST: dict[tuple[str, str], float] = {}  # Empty: no lexicon-based substitution costs
+
+
 def normalize_russian_word(text: str) -> str:
-    out = []
-    for ch in str(text).lower():
-        if ch in RUSSIAN_CHARS:
-            out.append(ch)
-    return "".join(out)
+    """Stub: returns lowercase letters only. Used by optional word-recognize API."""
+    return "".join(ch for ch in str(text).lower() if ch.isalpha())
 
 
-def load_word_lexicon() -> tuple[set[str], dict[str, float], dict[int, list[str]]]:
-    lexicon: set[str] = set()
-    word_log_prob: dict[str, float] = {}
-    words_by_length: dict[int, list[str]] = {}
-    if not WORD_LM_JSON_PATH.exists():
-        return lexicon, word_log_prob, words_by_length
-
-    try:
-        payload = json.loads(WORD_LM_JSON_PATH.read_text(encoding="utf-8"))
-    except Exception:  # noqa: BLE001
-        return lexicon, word_log_prob, words_by_length
-
-    raw_word_log_prob = payload.get("wordLogProb", {})
-    if isinstance(raw_word_log_prob, dict):
-        for raw_word, raw_score in raw_word_log_prob.items():
-            word = normalize_russian_word(raw_word)
-            if not word:
-                continue
-            score = float(raw_score) if isinstance(raw_score, (int, float)) else -20.0
-            lexicon.add(word)
-            word_log_prob[word] = score
-
-    raw_words_by_length = payload.get("wordsByLength", {})
-    if isinstance(raw_words_by_length, dict):
-        for raw_len, arr in raw_words_by_length.items():
-            if not isinstance(arr, list):
-                continue
-            try:
-                n = int(raw_len)
-            except (ValueError, TypeError):
-                continue
-            cleaned: list[str] = []
-            seen: set[str] = set()
-            for item in arr:
-                word = normalize_russian_word(item)
-                if not word or len(word) != n or word in seen:
-                    continue
-                cleaned.append(word)
-                seen.add(word)
-                lexicon.add(word)
-                if word not in word_log_prob:
-                    word_log_prob[word] = -18.0
-            cleaned.sort(key=lambda w: word_log_prob.get(w, -20.0), reverse=True)
-            words_by_length[n] = cleaned
-
-    for word in lexicon:
-        words_by_length.setdefault(len(word), []).append(word)
-    for n, arr in words_by_length.items():
-        deduped = list(dict.fromkeys(arr))
-        deduped.sort(key=lambda w: word_log_prob.get(w, -20.0), reverse=True)
-        words_by_length[n] = deduped
-    return lexicon, word_log_prob, words_by_length
-
-
-WORD_LEXICON, WORD_LOG_PROB, WORDS_BY_LENGTH = load_word_lexicon()
-WORD_LM_LAST_MTIME = WORD_LM_JSON_PATH.stat().st_mtime if WORD_LM_JSON_PATH.exists() else 0.0
-WORD_LM_LAST_CHECK_MONO = 0.0
-WORD_LM_LAST_SOURCE = str(WORD_LM_JSON_PATH)
-
-
-def _candidate_word_csv_paths() -> list[Path]:
-    env_candidate = os.getenv("WORD_DATASET_CSV", "").strip()
-    seen: set[Path] = set()
-    out: list[Path] = []
-    raw_candidates = []
-    if env_candidate:
-        raw_candidates.append(Path(env_candidate).expanduser())
-    raw_candidates.extend(DEFAULT_WORD_CSV_CANDIDATES)
-    for path in raw_candidates:
-        try:
-            resolved = path.expanduser()
-        except Exception:  # noqa: BLE001
-            continue
-        if resolved in seen:
-            continue
-        seen.add(resolved)
-        if resolved.exists() and resolved.is_file():
-            out.append(resolved)
-    return out
-
-
-def _maybe_rebuild_word_lm_from_csv(force: bool = False) -> Path | None:
-    csv_candidates = _candidate_word_csv_paths()
-    if not csv_candidates:
-        return None
-    csv_path = csv_candidates[0]
-
-    lm_exists = WORD_LM_JSON_PATH.exists()
-    lm_mtime = WORD_LM_JSON_PATH.stat().st_mtime if lm_exists else 0.0
-    csv_mtime = csv_path.stat().st_mtime
-    needs_rebuild = force or (not lm_exists) or (csv_mtime > lm_mtime + 1e-6)
-    if not needs_rebuild:
-        return csv_path
-
-    script_path = ROOT / "scripts" / "prepare_word_lm_dataset.py"
-    if not script_path.exists():
-        return csv_path
-    try:
-        subprocess.run(
-            [
-                "python3",
-                str(script_path),
-                "--train-csv",
-                str(csv_path),
-                "--out",
-                str(WORD_LM_JSON_PATH),
-            ],
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-    except Exception as exc:  # noqa: BLE001
-        print(f"[warn] Failed rebuilding word LM from CSV {csv_path}: {exc}")
-    return csv_path
-
-
-def _reload_word_lexicon() -> None:
-    global WORD_LEXICON, WORD_LOG_PROB, WORDS_BY_LENGTH, WORD_LM_LAST_MTIME
-    WORD_LEXICON, WORD_LOG_PROB, WORDS_BY_LENGTH = load_word_lexicon()
-    WORD_LM_LAST_MTIME = WORD_LM_JSON_PATH.stat().st_mtime if WORD_LM_JSON_PATH.exists() else 0.0
+# No word LM file — Zoogle uses letter-only CNN. Empty lexicon for optional /api/word-recognize.
+WORD_LEXICON: set[str] = set()
+WORD_LOG_PROB: dict[str, float] = {}
+WORDS_BY_LENGTH: dict[int, list[str]] = {}
+WORD_LM_LAST_SOURCE = "none"
 
 
 def ensure_word_lexicon_current(force: bool = False) -> None:
-    global WORD_LM_LAST_CHECK_MONO, WORD_LM_LAST_SOURCE
-    now = time.monotonic()
-    if not force and now - WORD_LM_LAST_CHECK_MONO < WORD_LM_REFRESH_INTERVAL_SEC:
-        return
-    WORD_LM_LAST_CHECK_MONO = now
-
-    source = _maybe_rebuild_word_lm_from_csv(force=force)
-    if source is not None:
-        WORD_LM_LAST_SOURCE = str(source)
-
-    latest_mtime = WORD_LM_JSON_PATH.stat().st_mtime if WORD_LM_JSON_PATH.exists() else 0.0
-    if force or abs(latest_mtime - WORD_LM_LAST_MTIME) > 1e-6:
-        _reload_word_lexicon()
+    """No-op: no word LM to load."""
+    pass
 
 
 def _safe_language_id(raw: Any) -> str | None:
@@ -1119,7 +958,6 @@ class AppHandler(SimpleHTTPRequestHandler):
                     "ok": True,
                     "openai_configured": bool(os.getenv("OPENAI_API_KEY", "").strip()),
                     "lexicon_size": len(WORD_LEXICON),
-                    "word_lm_path": str(WORD_LM_JSON_PATH),
                     "word_dataset_source": WORD_LM_LAST_SOURCE,
                 },
             )
