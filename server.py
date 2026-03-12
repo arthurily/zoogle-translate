@@ -976,6 +976,25 @@ class AppHandler(SimpleHTTPRequestHandler):
             payload = load_language_profiles_payload()
             self._send_json(HTTPStatus.OK, {"ok": True, **payload})
             return
+        if self.path in {"/api/save-alien", "/api/save-alien/"}:
+            data = load_language_profiles_payload()
+            profiles = data.get("profiles") or []
+            alien_profile = None
+            for p in profiles:
+                if p and (p.get("name") == "ALIEN" or p.get("id") == "lang-mmn50qbg-ets0ol"):
+                    alien_profile = p
+                    break
+            if not alien_profile:
+                self._send_json(HTTPStatus.NOT_FOUND, {"ok": False, "error": "ALIEN dataset not found on disk"})
+                return
+            out = dict(alien_profile)
+            out["id"] = "alien"
+            out["name"] = out.get("name") or "ALIEN"
+            _ensure_language_store()
+            path = LANGUAGE_STORE_DIR / "alien.json"
+            path.write_text(json.dumps(out, ensure_ascii=False), encoding="utf-8")
+            self._send_json(HTTPStatus.OK, {"ok": True, "path": str(path), "message": "Saved to data/languages/alien.json"})
+            return
         super().do_GET()
 
     def do_POST(self) -> None:  # noqa: N802

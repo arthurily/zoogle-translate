@@ -866,29 +866,48 @@ async function saveAndPushToGitHub() {
 
 async function saveAlienToFile() {
   syncCurrentProfile();
-  let profile = null;
-  for (const id of Object.keys(state.languages)) {
-    const p = state.languages[id];
-    if (p && (p.name === "ALIEN" || id === "lang-mmn50qbg-ets0ol")) {
-      profile = p;
-      break;
-    }
-  }
-  if (!profile) profile = activeProfile();
-  if (!profile) {
-    window.alert("No language selected. Select ALIEN or another language first.");
-    return;
-  }
-  const payload = {
-    id: profile.id,
-    name: profile.name || "ALIEN",
-    samplesByLetter: profile.samplesByLetter,
-    metrics: profile.metrics || { valAcc: null, valLoss: null, trainedAt: null },
-    model: serializeModel(profile.model),
-  };
   if (el.saveAlienBtn) el.saveAlienBtn.disabled = true;
   setRepoSaveStatus("Saving to alien.json...", "training");
   try {
+    const getResp = await fetch("/api/save-alien", { method: "GET", cache: "no-store" });
+    if (getResp.ok) {
+      const result = await getResp.json();
+      setRepoSaveStatus("Saved to data/languages/alien.json", "ready");
+      return;
+    }
+    let profile = null;
+    for (const id of Object.keys(state.languages)) {
+      const p = state.languages[id];
+      if (p && (p.name === "ALIEN" || id === "lang-mmn50qbg-ets0ol")) {
+        profile = p;
+        break;
+      }
+    }
+    if (!profile) {
+      const apiResp = await fetch(LANGUAGES_API_PATH, { cache: "no-store" });
+      if (apiResp.ok) {
+        const data = await apiResp.json();
+        const profiles = data.profiles || [];
+        for (let i = 0; i < profiles.length; i += 1) {
+          const p = profiles[i];
+          if (p && (p.name === "ALIEN" || p.id === "lang-mmn50qbg-ets0ol")) {
+            profile = p;
+            break;
+          }
+        }
+      }
+    }
+    if (!profile) profile = activeProfile();
+    if (!profile) {
+      throw new Error("ALIEN dataset not found. Reload from server first.");
+    }
+    const payload = {
+      id: profile.id,
+      name: profile.name || "ALIEN",
+      samplesByLetter: profile.samplesByLetter,
+      metrics: profile.metrics || { valAcc: null, valLoss: null, trainedAt: null },
+      model: profile.model && typeof profile.model === "object" ? profile.model : serializeModel(profile.model),
+    };
     const resp = await fetch("/api/save-alien", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
