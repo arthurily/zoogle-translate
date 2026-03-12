@@ -858,12 +858,6 @@ async function saveAlienToFile() {
   if (el.saveAlienBtn) el.saveAlienBtn.disabled = true;
   setRepoSaveStatus("Saving to alien.json...", "training");
   try {
-    const getResp = await fetch("/api/save-alien", { method: "GET", cache: "no-store" });
-    if (getResp.ok) {
-      const result = await getResp.json();
-      setRepoSaveStatus("Saved to data/languages/alien.json", "ready");
-      return;
-    }
     let profile = null;
     for (const id of Object.keys(state.languages)) {
       const p = state.languages[id];
@@ -888,7 +882,12 @@ async function saveAlienToFile() {
     }
     if (!profile) profile = activeProfile();
     if (!profile) {
-      throw new Error("ALIEN dataset not found. Reload from server first.");
+      const getResp = await fetch("/api/save-alien", { method: "GET", cache: "no-store" });
+      if (getResp.ok) {
+        setRepoSaveStatus("Saved to data/languages/alien.json", "ready");
+        return;
+      }
+      throw new Error("ALIEN dataset not found. Select ALIEN and draw samples, or Reload from Server first.");
     }
     const payload = {
       id: profile.id,
