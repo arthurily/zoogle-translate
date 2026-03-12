@@ -349,7 +349,7 @@ function ensureLanguageInitialized() {
     return;
   }
   if (!state.activeLanguageId || !state.languages[state.activeLanguageId]) {
-    state.activeLanguageId = ids[0];
+    state.activeLanguageId = state.languages["alien"] ? "alien" : ids[0];
   }
   loadProfileToState(state.activeLanguageId);
 }
