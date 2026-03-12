@@ -583,11 +583,11 @@ async function flushServerSave() {
   }
 }
 
-const LANGUAGES_STATIC_INDEX = "/data/languages/index.json";
+const LANGUAGES_STATIC_BASE = "data/languages";
 
 async function loadLanguagesFromStaticFiles() {
   try {
-    const indexResp = await fetch(LANGUAGES_STATIC_INDEX, { cache: "no-store" });
+    const indexResp = await fetch(`${LANGUAGES_STATIC_BASE}/index.json`, { cache: "no-store" });
     if (!indexResp.ok) return null;
     const index = await indexResp.json();
     const ids = Array.isArray(index.profileIds) ? index.profileIds : [];
@@ -597,7 +597,7 @@ async function loadLanguagesFromStaticFiles() {
     for (let i = 0; i < ids.length; i += 1) {
       const id = String(ids[i]).trim();
       if (!/^[A-Za-z0-9_-]{1,120}$/.test(id)) continue;
-      const resp = await fetch(`/data/languages/${encodeURIComponent(id)}.json`, { cache: "no-store" });
+      const resp = await fetch(`${LANGUAGES_STATIC_BASE}/${encodeURIComponent(id)}.json`, { cache: "no-store" });
       if (!resp.ok) continue;
       const raw = await resp.json();
       if (!raw || typeof raw !== "object") continue;
