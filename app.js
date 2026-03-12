@@ -583,6 +583,56 @@ async function flushServerSave() {
   }
 }
 
+const LANGUAGES_STATIC_INDEX = "/data/languages/index.json";
+
+async function loadLanguagesFromStaticFiles() {
+  try {
+    const indexResp = await fetch(LANGUAGES_STATIC_INDEX, { cache: "no-store" });
+    if (!indexResp.ok) return null;
+    const index = await indexResp.json();
+    const ids = Array.isArray(index.profileIds) ? index.profileIds : [];
+    if (!ids.length) return null;
+
+    const profiles = [];
+    for (let i = 0; i < ids.length; i += 1) {
+      const id = String(ids[i]).trim();
+      if (!/^[A-Za-z0-9_-]{1,120}$/.test(id)) continue;
+      const resp = await fetch(`/data/languages/${encodeURIComponent(id)}.json`, { cache: "no-store" });
+      if (!resp.ok) continue;
+      const raw = await resp.json();
+      if (!raw || typeof raw !== "object") continue;
+      const samplesByLetter = {};
+      for (let j = 0; j < LETTERS.length; j += 1) {
+        const letter = LETTERS[j];
+        const arr = Array.isArray(raw.samplesByLetter?.[letter]) ? raw.samplesByLetter[letter] : [];
+        const valid = [];
+        for (let k = 0; k < arr.length; k += 1) {
+          const s = sanitizeIncomingSample(arr[k]);
+          if (s) valid.push(s);
+        }
+        samplesByLetter[letter] = valid;
+      }
+      profiles.push({
+        id: raw.id || id,
+        name: String(raw.name || "Unnamed").slice(0, 120),
+        samplesByLetter,
+        metrics: raw.metrics && typeof raw.metrics === "object"
+          ? { valAcc: raw.metrics.valAcc, valLoss: raw.metrics.valLoss, trainedAt: raw.metrics.trainedAt }
+          : { valAcc: null, valLoss: null, trainedAt: null },
+        model: raw.model ?? null,
+      });
+    }
+    if (!profiles.length) return null;
+    return {
+      profiles,
+      activeLanguageId: typeof index.activeLanguageId === "string" ? index.activeLanguageId : profiles[0].id,
+      savedAt: Date.now(),
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
 async function hydrateStateFromServer() {
   if (languageApiAvailability === "unavailable") return;
   try {
@@ -593,13 +643,61 @@ async function hydrateStateFromServer() {
     });
     if (resp.status === 404 || resp.status === 405) {
       languageApiAvailability = "unavailable";
+      const fallback = await loadLanguagesFromStaticFiles();
+      if (fallback && fallback.profiles.length > 0) {
+        const payload = {
+          version: 2,
+          activeLanguageId: fallback.activeLanguageId,
+          profiles: fallback.profiles,
+          savedAt: fallback.savedAt,
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+        loadState();
+        ensureLanguageInitialized();
+        drawGuideLetter();
+        clearPredictionDisplays();
+        resetTranslator();
+        updateUi();
+      }
       return;
     }
     if (!resp.ok) {
+      const fallback = await loadLanguagesFromStaticFiles();
+      if (fallback && fallback.profiles.length > 0) {
+        const payload = {
+          version: 2,
+          activeLanguageId: fallback.activeLanguageId,
+          profiles: fallback.profiles,
+          savedAt: fallback.savedAt,
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+        loadState();
+        ensureLanguageInitialized();
+        drawGuideLetter();
+        clearPredictionDisplays();
+        resetTranslator();
+        updateUi();
+      }
       return;
     }
     const remote = await resp.json();
     if (!remote || !Array.isArray(remote.profiles)) {
+      const fallback = await loadLanguagesFromStaticFiles();
+      if (fallback && fallback.profiles.length > 0) {
+        const payload = {
+          version: 2,
+          activeLanguageId: fallback.activeLanguageId,
+          profiles: fallback.profiles,
+          savedAt: fallback.savedAt,
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+        loadState();
+        ensureLanguageInitialized();
+        drawGuideLetter();
+        clearPredictionDisplays();
+        resetTranslator();
+        updateUi();
+      }
       return;
     }
     languageApiAvailability = "available";
@@ -645,6 +743,22 @@ async function hydrateStateFromServer() {
     console.warn("Server language load failed:", err);
     if (languageApiAvailability === "unknown" && err instanceof TypeError) {
       languageApiAvailability = "unavailable";
+    }
+    const fallback = await loadLanguagesFromStaticFiles();
+    if (fallback && fallback.profiles.length > 0) {
+      const payload = {
+        version: 2,
+        activeLanguageId: fallback.activeLanguageId,
+        profiles: fallback.profiles,
+        savedAt: fallback.savedAt,
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+      loadState();
+      ensureLanguageInitialized();
+      drawGuideLetter();
+      clearPredictionDisplays();
+      resetTranslator();
+      updateUi();
     }
   }
 }
