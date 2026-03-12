@@ -309,6 +309,26 @@ function createLanguageProfile(name = "Unnamed Language", id = null) {
   };
 }
 
+function defaultLanguageNameForId(id) {
+  const key = String(id || "").toLowerCase();
+  if (key === "alien" || key === "alien_zoogle" || /alien/.test(key)) return "ALIEN";
+  if (key === "english") return "English";
+  return "Unnamed Language";
+}
+
+function isPlaceholderLanguageName(name) {
+  return /^unnamed(?: language)?$/i.test(String(name || "").trim());
+}
+
+function resolvedProfileName(profile) {
+  const explicit = sanitizeLanguageName(profile?.name || "");
+  if (explicit && !isPlaceholderLanguageName(explicit)) return explicit;
+  const fallback = defaultLanguageNameForId(profile?.id);
+  if (fallback !== "Unnamed Language") return fallback;
+  if (explicit) return explicit;
+  return defaultLanguageNameForId(profile?.id);
+}
+
 function activeProfile() {
   if (!state.activeLanguageId) return null;
   return state.languages[state.activeLanguageId] || null;
@@ -317,7 +337,15 @@ function activeProfile() {
 function syncCurrentProfile() {
   const profile = activeProfile();
   if (!profile) return;
-  profile.name = sanitizeLanguageName(state.languageName) || "Unnamed Language";
+  const typed = sanitizeLanguageName(state.languageName);
+  const existing = sanitizeLanguageName(profile.name);
+  if (typed) {
+    profile.name = typed;
+  } else if (existing && !isPlaceholderLanguageName(existing)) {
+    profile.name = existing;
+  } else {
+    profile.name = defaultLanguageNameForId(profile.id);
+  }
   profile.samplesByLetter = state.samplesByLetter;
   profile.model = state.model;
   profile.metrics = state.metrics;
@@ -326,9 +354,12 @@ function syncCurrentProfile() {
 function loadProfileToState(profileId) {
   const profile = state.languages[profileId];
   if (!profile) return false;
-  syncCurrentProfile();
+  if (state.activeLanguageId && state.activeLanguageId !== profileId) {
+    syncCurrentProfile();
+  }
   state.activeLanguageId = profileId;
-  state.languageName = sanitizeLanguageName(profile.name) || "Unnamed Language";
+  state.languageName = resolvedProfileName(profile);
+  profile.name = state.languageName;
   state.samplesByLetter = profile.samplesByLetter || emptySamplesMap();
   state.model = profile.model || null;
   state.metrics = profile.metrics || { valAcc: null, valLoss: null, trainedAt: null };
