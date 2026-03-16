@@ -109,13 +109,6 @@ const el = {
   exportDatasetBtn: document.getElementById("export-dataset-btn"),
   importDatasetBtn: document.getElementById("import-dataset-btn"),
   importDatasetInput: document.getElementById("import-dataset-input"),
-  saveRepoDatasetsBtn: document.getElementById("save-repo-datasets-btn"),
-  pushGitHubBtn: document.getElementById("push-github-btn"),
-  saveAlienBtn: document.getElementById("save-alien-btn"),
-  reloadLanguagesBtn: document.getElementById("reload-languages-btn"),
-  repoSaveStatus: document.getElementById("repo-save-status"),
-  saveHint: document.getElementById("save-hint"),
-
   trainBtn: document.getElementById("train-btn"),
   trainStatus: document.getElementById("train-status"),
   valAcc: document.getElementById("val-acc"),
@@ -169,8 +162,6 @@ function assertDom() {
     ["language-select", el.languageSelect],
     ["guide-canvas", el.guideCanvas],
     ["dataset-canvas", el.datasetCanvas],
-    ["save-repo-datasets-btn", el.saveRepoDatasetsBtn],
-    ["repo-save-status", el.repoSaveStatus],
     ["train-btn", el.trainBtn],
     ["translate-input-row", el.translateInputRow],
     ["test-canvas", el.testCanvas],
@@ -263,8 +254,9 @@ function setPill(node, text, kind) {
 }
 
 function setRepoSaveStatus(text, kind) {
-  if (!el.repoSaveStatus) return;
-  setPill(el.repoSaveStatus, text, kind);
+  const elm = document.getElementById("repo-save-status");
+  if (!elm) return;
+  setPill(elm, text, kind);
 }
 
 function typesetMath(node = document.body, retries = 60) {
@@ -828,7 +820,8 @@ async function saveAllLanguagesToRepoFiles() {
   const payload = buildStatePayload();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
 
-  el.saveRepoDatasetsBtn.disabled = true;
+  const saveBtn = document.getElementById("save-repo-datasets-btn");
+  if (saveBtn) saveBtn.disabled = true;
   setRepoSaveStatus("Saving language datasets to repo files...", "training");
   try {
     const resp = await fetch(LANGUAGES_API_PATH, {
@@ -852,7 +845,8 @@ async function saveAllLanguagesToRepoFiles() {
     window.alert(`Save failed: ${message}\n\nMake sure server.py is running and open http://127.0.0.1:8000`);
     console.warn("Manual language dataset save failed:", err);
   } finally {
-    el.saveRepoDatasetsBtn.disabled = false;
+    const btn = document.getElementById("save-repo-datasets-btn");
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -860,8 +854,10 @@ async function saveAndPushToGitHub() {
   const payload = buildStatePayload();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
 
-  if (el.pushGitHubBtn) el.pushGitHubBtn.disabled = true;
-  if (el.saveRepoDatasetsBtn) el.saveRepoDatasetsBtn.disabled = true;
+  const pushBtn = document.getElementById("push-github-btn");
+  const saveRepoBtn = document.getElementById("save-repo-datasets-btn");
+  if (pushBtn) pushBtn.disabled = true;
+  if (saveRepoBtn) saveRepoBtn.disabled = true;
   setRepoSaveStatus("Saving...", "training");
   try {
     const saveResp = await fetch(LANGUAGES_API_PATH, {
@@ -893,14 +889,15 @@ async function saveAndPushToGitHub() {
     setRepoSaveStatus("Save failed", "pending");
     window.alert(`Save failed: ${msg}\n\nMake sure server.py is running. Open http://127.0.0.1:8000`);
   } finally {
-    if (el.pushGitHubBtn) el.pushGitHubBtn.disabled = false;
-    if (el.saveRepoDatasetsBtn) el.saveRepoDatasetsBtn.disabled = false;
+    if (pushBtn) pushBtn.disabled = false;
+    if (saveRepoBtn) saveRepoBtn.disabled = false;
   }
 }
 
 async function saveAlienToFile() {
   syncCurrentProfile();
-  if (el.saveAlienBtn) el.saveAlienBtn.disabled = true;
+  const saveAlienBtn = document.getElementById("save-alien-btn");
+  if (saveAlienBtn) saveAlienBtn.disabled = true;
   setRepoSaveStatus("Saving to alien.json...", "training");
   try {
     let profile = null;
@@ -956,7 +953,7 @@ async function saveAlienToFile() {
     setRepoSaveStatus(msg, "pending");
     window.alert(`Save failed: ${msg}\n\nMake sure server.py is running. Open http://127.0.0.1:8000`);
   } finally {
-    if (el.saveAlienBtn) el.saveAlienBtn.disabled = false;
+    if (saveAlienBtn) saveAlienBtn.disabled = false;
   }
 }
 
@@ -2766,26 +2763,6 @@ function bindEvents() {
     const file = evt.target.files && evt.target.files[0];
     await importDatasetFile(file);
   });
-  el.saveRepoDatasetsBtn.addEventListener("click", () => {
-    void saveAllLanguagesToRepoFiles();
-  });
-  if (el.pushGitHubBtn) {
-    el.pushGitHubBtn.addEventListener("click", () => {
-      void saveAndPushToGitHub();
-    });
-  }
-  if (el.saveAlienBtn) {
-    el.saveAlienBtn.addEventListener("click", () => {
-      void saveAlienToFile();
-    });
-  }
-  if (el.reloadLanguagesBtn) {
-    el.reloadLanguagesBtn.addEventListener("click", async () => {
-      languageApiAvailability = "unknown";
-      await hydrateStateFromServer();
-    });
-  }
-
   el.trainBtn.addEventListener("click", trainModel);
 
   el.translateBtn.addEventListener("click", translateSequence);
@@ -2844,9 +2821,6 @@ function initialize() {
   clearPredictionDisplays();
   resetTranslator();
 
-  if (el.saveHint && document.location.protocol === "file:") {
-    el.saveHint.style.display = "block";
-  }
   bindEvents();
   updateUi();
   switchView("translate");
